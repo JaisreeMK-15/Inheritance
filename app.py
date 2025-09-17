@@ -9,8 +9,7 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 # -------------------------
 @st.cache_data
 def load_data():
-    # Use relative path so it works on Streamlit Cloud
-    df = pd.read_csv("Crop_recommendationV2.csv")   
+    df = pd.read_csv("Crop_recommendationV2.csv")
     return df
 
 # -------------------------
@@ -46,9 +45,24 @@ def crop_rotation_predictor(crop_name, df, model, scaler, encoder, feature_colum
     if crop_data.empty:
         return []
 
-    # Ensure all feature columns are present (fixes feature mismatch)
+    # Reindex to dataset feature columns
     crop_data = crop_data.reindex(columns=feature_columns, fill_value=0)
-    avg_conditions = crop_data.mean().values.reshape(1, -1)
+
+    # --- Fix: Align with model’s expected features ---
+    if hasattr(model, "n_features_in_"):
+        expected = model.n_features_in_
+        actual = crop_data.shape[1]
+
+        if actual < expected:
+            # Add dummy zero columns for missing features
+            for i in range(expected - actual):
+                crop_data[f"missing_{i}"] = 0
+        elif actual > expected:
+            # Trim extras
+            crop_data = crop_data.iloc[:, :expected]
+
+    # Average growing conditions
+    avg_conditions = crop_data.mean().to_frame().T
     avg_scaled = scaler.transform(avg_conditions)
 
     if hasattr(model, "predict_proba"):
